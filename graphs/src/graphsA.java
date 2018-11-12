@@ -9,35 +9,22 @@ import java.util.LinkedList;
 import static java.nio.file.Files.exists;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
-class vertex {
-    String name;
-    int connectedCount;
-    double weight;
-    boolean directed;
-
-    vertex() {
-        name = null;
-        //measures recursion depth when checking connectivity
-        connectedCount = 0;
-        weight = 0;
-        directed = false;
-
-    }
-
-    vertex(String vertexName) {
-        name = vertexName;
-        //measures recursion depth when checking connectivity
-        connectedCount = 0;
-        weight = 0;
-        directed = false;
-    }
-}
-
-public class graphs {
+public class graphsA {
 
     /**
-     * Adjacency Lists:
-     * Example: vertex A has directly connecting edges to vertices B and E
+     * Adjacency Matrix:
+     * Example: (undirected) vertex A has directly connecting edges to vertices B and E
+     *   A B C D E
+     * A|\|1|0|0|1|
+     * ------------
+     * B|1|\|0|0|0|
+     * ------------
+     * C|0|0|\|0|0|
+     * ------------
+     * D|0|0|0|\|0|
+     * ------------
+     * E|1|0|0|0|\|
+     * ------------
      * A -> B -> E
      * These are sub-lists.
      * There is one of these lists per vertex. Each list starts with one vertex, and each
@@ -52,159 +39,154 @@ public class graphs {
      * .     .
      * E     D
      */
-    private LinkedList<vertex> adjacencyList;
+
+    static final int MAX_GRAPH_VERTICES = 26;
+    double adjMatrix[][] = new double [MAX_GRAPH_VERTICES][MAX_GRAPH_VERTICES];
+    // maps a vertex name to its index in adjMatrix
+    static final String vertexIndex[] = new String[MAX_GRAPH_VERTICES];
+    /*
+     * Counts the number of times vertex was visited during a connection search.
+     *  Nonzero means the graph is connected.
+     *  Nonzero in all vertices means graph is fully connected.
+     */
+    static final int connectedCount[] = new int[MAX_GRAPH_VERTICES];
+    private int numAddedVertices = 0;
 
     /**
-     * Index of the Adjacency Lists:
-     * This is the master list of all adjacency lists.
-     * An individual adjacency list is a linked list of a particular vertex and all its
-     * direct edges.
-     * |A| -> B -> E
-     * |B| -> A
-     * |C| -> null
-     * |D| -> null
-     * |E| -> A
+     *
+     * @param vertexName
+     * @param directed
+     * @return indexOfVertex
      */
-    private LinkedList<LinkedList <vertex>> listOfAdjacencyLists;
+    private int addVertex(String vertexName, boolean directed) {
+        int indexOfVertex;
 
-    private LinkedList<vertex> addVertex(String vertexName, boolean directed) {
-        vertex beingCreated = new vertex(vertexName);
-        beingCreated.directed = directed;
-        // handle null cases
-        if (listOfAdjacencyLists != null)
+        // handle error cases
+        // if outside the graph bounds
+        if (numAddedVertices >= MAX_GRAPH_VERTICES)
         {
-            if (findAdjacencyList(beingCreated) != null)
-            {
-                return null;
-            }
+            return -1;
         }
-        else {
-            //create adjacency list of lists
-            listOfAdjacencyLists = new LinkedList<LinkedList <vertex>>();
-
+        // if it is already there
+        if (findVertexIndex(vertexName) > 0)
+        {
+            return -1;
         }
 
-        LinkedList<vertex> newAdjacencyList = new LinkedList<>();
-        newAdjacencyList.add(beingCreated);
-        listOfAdjacencyLists.add(newAdjacencyList);
-        return newAdjacencyList;
-
+        // add vertexName to vertexIndex
+        vertexIndex[numAddedVertices] = vertexName;
+        indexOfVertex = numAddedVertices;
+        numAddedVertices++;
+        return indexOfVertex;
     }
 
-    private boolean addEdge(vertex starting, vertex connection, double weight, boolean directed) {
-        System.out.println("debug: addEdge: starting = " + starting.name
-                + ", connection = " + connection.name + ", weight = " + weight + ", directed = " + directed);
+    /**
+     *
+     * @param starting
+     * @param connection
+     * @param weight
+     * @param directed
+     * @return true if edge added, false if edge could not be added
+     */
+    private boolean addEdge(String starting, String connection, double weight, boolean directed) {
+
+        System.out.println("debug: addEdge: starting = " + starting
+                + ", connection = " + connection + ", weight = " + weight + ", directed = " + directed);
         boolean rc = false;
 
+        int indexOfStarting = findVertexIndex(starting);
+        int indexOfConnection = findVertexIndex(connection);
 
-        LinkedList<vertex> startingAdjacencyList = findAdjacencyList(starting);
-        if (startingAdjacencyList == null) {
-            return rc;
-        }
         System.out.println("------- debug: addEdge: calling hasEdge does edge exist for " +
-                starting.name + " -> " + connection.name + " -------");
+                starting + " -> " + connection + " -------");
         if (hasEdge(starting, connection) == false)
         {
             System.out.println("debug: addEdge: hasEdge was false");
-            LinkedList<vertex> connectionAdjacencyList = findAdjacencyList(connection);
-            if (connectionAdjacencyList == null) {
+            if (indexOfConnection < 0) {
                 return rc;
             }
 
-            connection.weight = weight;
-            connection.directed = directed;
-            startingAdjacencyList.add(connection);
+            // if graph is unweighted
+            if (weight == 0) {
+                weight = 1;
+            }
+            adjMatrix[indexOfStarting][indexOfConnection] = weight;
             rc = true;
+
             if (directed == false)
             {
-                System.out.println("debug: addEdge: found connection list " + connection.name);
-                starting.weight = weight;
-                starting.directed = directed;
-                connectionAdjacencyList.add(starting);
+                System.out.println("debug: addEdge: found connection " + connection);
+                adjMatrix[indexOfConnection][indexOfStarting] = weight;
             }
         }
         else {
             //edge already exists, see if weight has changed
             if (weight != 0) {
-                if (startingAdjacencyList != null) {
-                    if (connection.weight != weight) {
-                        connection.weight = weight;
-                        rc = true;
-                    }
+                if (adjMatrix[indexOfStarting][indexOfConnection] != weight) {
+                    adjMatrix[indexOfStarting][indexOfConnection] = weight;
+                    rc = true;
                 }
             }
         }
-        System.out.println("debug: addEdge: returns " + rc + ", weight = " + connection.weight);
+
+        System.out.println("debug: addEdge: returns " + rc + ", weight = " + weight);
         return rc;
     }
 
-    private LinkedList<vertex> findAdjacencyList(vertex root) {
+    /**
+     *
+     * @param vertexName
+     * @return int 
+     */
+    private int findVertexIndex(String vertexName) {
         int indexOfRoot;
 
-        //System.out.println("debug: findAdjacencyList: Looking for vertex " + root.name);
-        for (indexOfRoot = 0; indexOfRoot < listOfAdjacencyLists.size(); indexOfRoot++) {
-            String connectionName = listOfAdjacencyLists.get(indexOfRoot).getFirst().name;
-            // search for name of vertex matching the name in the adjacency list
-            //System.out.println("debug: findAdjacencyList: checking for a vertex list for " + connectionName);
-            if (connectionName.equals(root.name)) {
-               // System.out.println("debug: findAdjacencyList: found vertex list for " + connectionName);
-                return listOfAdjacencyLists.get(indexOfRoot);
+        //System.out.println("debug: findVertexIndex: Looking for vertex " + vertexName);
+        for (indexOfRoot = 0; indexOfRoot < MAX_GRAPH_VERTICES; indexOfRoot++) {
+            String connectionName = vertexIndex[indexOfRoot];
+            // search for name of vertex matching the name caller passed in
+            // System.out.println("debug: findVertexIndex: checking for vertex = " + vertexName + ", connection = " + connectionName);
+            // ignore null entries
+            if (connectionName == null) {
+                continue;
+            }
+            if (connectionName.equals(vertexName)) {
+               //  System.out.println("debug: findVertexIndex: found vertex index for " + vertexName);
+                return indexOfRoot;
             }
         }
-        return null;
+
+        return -1;
     }
 
-    private boolean deleteEdge(vertex starting, vertex connecting) {
+    /**
+     *
+     * @param starting
+     * @param connecting
+     * @return
+     */
+    private boolean deleteEdge(String starting, String connecting, boolean directed) {
         boolean rc = false;
-        LinkedList<vertex> adjacencyList = findAdjacencyList(starting);
-        // if the edge does not exist
-        if (adjacencyList == null) {
-            rc = false;
-            System.out.println("debug: deleteEdge: adjacencyList is null.");
+        final int errorFromFindVertexIndex = -1;
+        int indexOfStarting = findVertexIndex(starting);
+        int indexOfConnecting = findVertexIndex(connecting);
+        System.out.println("debug: deleteEdge: starting = " + indexOfStarting + ", connecting = " + indexOfConnecting);
+        if ((indexOfStarting == errorFromFindVertexIndex) || (indexOfConnecting == errorFromFindVertexIndex)) {
+            return rc;
         }
-        else {
-            int indexOfConnecting = 0;
-            int indexOfStarting = 0;
-            for (indexOfConnecting = 0; indexOfConnecting < adjacencyList.size(); indexOfConnecting++) {
-                if (adjacencyList.get(indexOfConnecting).name.equals(connecting.name)) {
-                    System.out.println("debug: deleteEdge: found connection in starting list " + starting.name
-                            + " -> " + connecting.name);
-                    /*
-                     * Have found the target connection.
-                     * If it's not a directed graph, have to delete the connection both ways.
-                     * delete A -> B && delete B -> A
-                     */
-                    adjacencyList.remove(indexOfConnecting);
-                    rc = true;
-                    //debug:
-                    printGraph();
-
-                    LinkedList<vertex> adjacencyList2 = findAdjacencyList(connecting);
-                    // if the vertex that starts the list indicates that it's undirected
-                    if (adjacencyList.get(0).directed == false) {
-
-                        for (indexOfStarting = 0; indexOfStarting < adjacencyList2.size(); indexOfStarting++) {
-                            if ( adjacencyList2.get(indexOfStarting).name.equals(starting.name) ) {
-                                System.out.println("debug: deleteEdge: unidirected graph, so found second edge to delete: "
-                                        + connecting.name + " -> " + starting.name);
-                                System.out.println("debug: deleteEdge: indexOfStarting = " + indexOfStarting
-                                        + ", indexOfConnecting = " + indexOfConnecting);
-                                // remove A from B -> A
-                                adjacencyList2.remove(indexOfStarting);
-                                //debug:
-                                printGraph();
-
-                                rc = true;
-                                break;
-                            }
-                        }
-                    }
-                    //found it
-                    break;
-                }
+        System.out.println("debug: deleteEdge: starting = " + vertexIndex[indexOfStarting]
+                + ", connecting = " + vertexIndex[indexOfConnecting]);
+        System.out.println("debug: deleteEdge: adjMatrix = " + adjMatrix[indexOfStarting][indexOfConnecting]);
+        if (adjMatrix[indexOfStarting][indexOfConnecting] != 0) {
+            adjMatrix[indexOfStarting][indexOfConnecting] = 0;
+            if (directed == true) {
+                adjMatrix[indexOfConnecting][indexOfStarting] = 0;
             }
+            rc = true;
+        } else {
+            // edge does not exist
+            rc = false;
         }
-
         return rc;
     }
 
@@ -236,72 +218,58 @@ public class graphs {
      *
      * @param deleting
      */
-    private boolean deleteVertex(vertex deleting) {
+    private boolean deleteVertex(String deleting, boolean directed) {
         boolean rc = false;
-        LinkedList<vertex> adjacencyList = findAdjacencyList(deleting);
-        if (adjacencyList == null)         {
-            rc = false;
+        int indexOfDeleting = findVertexIndex(deleting);
+        // does vertex exist?
+        if (indexOfDeleting == -1) {
+            return rc;
         }
-        final int indexOfFirstEdge = 1;
-        /* have to delete all connections (edges) before remove the vertex
-         * find all of the direct connections to the target vertex and
-         * delete them
-         */
-        if (adjacencyList != null) {
-            // TODO: Verify this does not have problems because it is changing the Linked List every time it deletes
-            while (adjacencyList.size() > indexOfFirstEdge) {
-
-                if (adjacencyList.get(indexOfFirstEdge).directed == false) {
-                    deleteEdge(adjacencyList.get(indexOfFirstEdge), deleting);
-                }
-                /*
-                 *Note: deleteEdge will delete the second item in the adjacency list when finished
-                 *Example: delete B -> A and then A -> B
-                 */
-                else {
-                    adjacencyList.remove(indexOfFirstEdge);
-                }
+        // find and delete connections to the vertex
+        for (int indexOfConnection = 0; indexOfConnection < MAX_GRAPH_VERTICES; indexOfConnection++) {
+            // should handle all directed graph A -> B cases:
+            adjMatrix[indexOfDeleting][indexOfConnection] = 0;
+            // undirected graph B -> A cases:
+            if (directed == false) {
+                adjMatrix[indexOfConnection][indexOfDeleting] = 0;
             }
-            // Now delete the vertex. (Example: Delete |A| -> B -> E has become |A| -> null)
-            listOfAdjacencyLists.remove(adjacencyList);
-            rc = true;
         }
+
+        // delete the vertex
+        vertexIndex[indexOfDeleting] = null;
+        rc = true;
         return rc;
     }
 
     /**
-     * For directed, only search the starting list.
-     * For undirected, search both the starting and the connected list.
      *
      * @param starting
      * @param connecting
-     * @return
+     * @return true if has an edge, false otherwise
      */
-    private boolean hasEdge(vertex starting, vertex connecting) {
-        LinkedList<vertex> adjacencyList = findAdjacencyList(starting);
-        if (adjacencyList == null) {
+    private boolean hasEdge(String starting, String connecting) {
+        int indexOfStarting = findVertexIndex(starting);
+        int indexOfConnecting = findVertexIndex(connecting);
+        final int errorFindVertexIndex = -1;
+        if ((indexOfStarting == errorFindVertexIndex) || (indexOfConnecting == errorFindVertexIndex)) {
             return false;
         }
+
+        // invalid cases for an edge
+        if ((indexOfStarting == indexOfConnecting)) {
+            return false;
+        }
+
         int indexOfRoot;
-        for (indexOfRoot = 0; indexOfRoot < adjacencyList.size(); indexOfRoot++) {
-            if ( connecting.name.equals(adjacencyList.get(indexOfRoot).name) ) {
+        for (indexOfRoot = 0; indexOfRoot < MAX_GRAPH_VERTICES; indexOfRoot++) {
+
+           // System.out.println("debug: hasEdge: starting = " + vertexIndex[indexOfStarting]
+             //       + ", connecting = " + vertexIndex[indexOfConnecting]
+               //     + ", weight = " + adjMatrix[indexOfStarting][indexOfStarting]);
+            if (adjMatrix[indexOfStarting][indexOfConnecting] != 0) {
                 return true;
             }
         }
-
-        /*
-        if (directed == false) {
-            adjacencyList = findAdjacencyList(connecting);
-            if (adjacencyList != null) {
-                for (indexOfRoot = 0; indexOfRoot < adjacencyList.size(); indexOfRoot++) {
-                    if ( starting.name.equals(adjacencyList.get(indexOfRoot).name) ) {
-                        return true;
-                    }
-                }
-            }
-        }
-        */
-
 
         return false;
     }
@@ -323,18 +291,21 @@ public class graphs {
      */
     private boolean isSparse(boolean direct)
     {
-        //if 0.15 * numVertices > numEdges then graph is sparse
+        // if 0.15 * numVertices > numEdges then graph is sparse
         final double densityProportion = 0.15;
-        double numEdges = countEdges();
+        double numEdges = countEdges(direct);
         double numVertices = countVertices();
+
         if (direct == false) {
             numEdges = numEdges / 2;
         }
+
         System.out.println("debug: isSparse: numEdges = " + numEdges + ", numVertices = " + numVertices
                 + ", densityProportion * numVertices = " + densityProportion*numVertices);
         if (densityProportion * numVertices > numEdges) {
             return true;
         }
+
         return false;
     }
 
@@ -346,44 +317,74 @@ public class graphs {
     private boolean isDense(boolean direct) {
         //if 0.85 * numVertices < numEdges then graph is dense
         final double densityProportion = 0.85;
-        double numEdges = countEdges();
+        double numEdges = countEdges(direct);
         double numVertices = countVertices();
+
         if (direct == false) {
             numEdges = numEdges / 2;
         }
+
         System.out.println("debug: isDense: numEdges = " + numEdges + ", numVertices = " + numVertices
                 + ", densityProportion * numVertices = " + densityProportion*numVertices);
         if (densityProportion * numVertices < numEdges) {
             return true;
         }
+
         return false;
     }
 
     /**
      * The number of vertices is the same as the number of lists.
-     * @return
+     * @return numVertices
      */
     private int countVertices() {
-        return listOfAdjacencyLists.size();
-    }
-
-    private int countEdges() {
-        int count = 0;
-        int indexOfAdjacencyList;
-        // -1 to avoid double counting the vertex
-        final int countOffset = 1;
-        for (indexOfAdjacencyList = 0; indexOfAdjacencyList < listOfAdjacencyLists.size(); indexOfAdjacencyList++) {
-            LinkedList<vertex> adjacencyList = listOfAdjacencyLists.get(indexOfAdjacencyList);
-            System.out.println("debug: countEdges: adjacencyList.size() = " + adjacencyList.size()
-                    + ", indexOfAdjacencyList " + indexOfAdjacencyList);
-            count += (adjacencyList.size() - countOffset);
-            System.out.println("debug: countEdges: count = " + count);
+        int numVertices = 0;
+        for (int indexOfVertices = 0; indexOfVertices < MAX_GRAPH_VERTICES; indexOfVertices++) {
+            if (vertexIndex[indexOfVertices] != null) {
+                numVertices++;
+            }
         }
-        return count;
+        return numVertices;
     }
 
     /**
-     * Build map of all connections (a matrix?)
+     *
+     * @return numEdges
+     */
+    private int countEdges(boolean directed) {
+        int indexOfStarting = 0;
+        int indexOfConnecting = 0;
+        int numEdges = 0;
+        for (indexOfStarting = 0; indexOfStarting < MAX_GRAPH_VERTICES; indexOfStarting++) {
+            // check the first triangle, regardless of directed or undirected
+            if (vertexIndex[indexOfStarting] != null) {
+                for (indexOfConnecting = 0; indexOfConnecting < indexOfStarting; indexOfConnecting++) {
+                    if ((vertexIndex[indexOfConnecting] != null)
+                            && (adjMatrix[indexOfStarting][indexOfConnecting] > 0)) {
+                        numEdges++;
+                    }
+                }
+            }
+        }
+        // undirected: check the second triangle
+        if (directed == false) {
+            for (indexOfConnecting = 0; indexOfConnecting < MAX_GRAPH_VERTICES; indexOfConnecting++) {
+                if (vertexIndex[indexOfConnecting] != null) {
+                    for (indexOfStarting = 0; indexOfStarting > indexOfConnecting; indexOfStarting++) {
+                        if ((vertexIndex[indexOfStarting] != null)
+                                && (adjMatrix[indexOfConnecting][indexOfStarting] > 0)) {
+                            numEdges++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return numEdges;
+    }
+
+    /**
+     * Build map of all connections
      * Then verify that there is a path to all vertices.
      *
      * Fully connected is also connected:
@@ -392,38 +393,47 @@ public class graphs {
      * Connected: If can travel through the whole graph via edges. (There is at least one path through the whole
      * graph.)
      *
-     * Since vertices are copies, have to also update all the copies.
-     *
      * @return boolean
      */
 
-    //TODO failing tests
     private boolean isConnected() {
         boolean returnCount = true;
         int numOfVertices = countVertices();
-        int indexOfAdjacencyList;
+        int indexOfVertices;
         final int unvisited = 0;
-        LinkedList<vertex> adjacencyList;
+
+
         // mark all vertices as unvisited
-        for (indexOfAdjacencyList = 0; indexOfAdjacencyList < listOfAdjacencyLists.size(); indexOfAdjacencyList++) {
-            adjacencyList = listOfAdjacencyLists.get(indexOfAdjacencyList);
-            adjacencyList.get(0).connectedCount = unvisited;
+        for (indexOfVertices = 0; indexOfVertices < MAX_GRAPH_VERTICES; indexOfVertices++) {
+            connectedCount[indexOfVertices] = 0;
         }
 
-        // search a "random" vertex and see if can reach all of the other vertices from it
-        adjacencyList = listOfAdjacencyLists.get(0);
-        dfs(adjacencyList);
+        // search the first vertex and see if can reach all of the other vertices from it
+        indexOfVertices = 0;
 
-        // check if all the adjacency lists were visited
-        for (indexOfAdjacencyList = 0; indexOfAdjacencyList < listOfAdjacencyLists.size(); indexOfAdjacencyList++) {
-            adjacencyList = listOfAdjacencyLists.get(indexOfAdjacencyList);
-            // if connection count for this vertex is 0, then all the vertices were not visited
-            if (adjacencyList.get(0).connectedCount == unvisited) {
-                returnCount = false;
+        // ensure that the first element given dfs is a valid vertex
+        for (indexOfVertices = 0; indexOfVertices < MAX_GRAPH_VERTICES; indexOfVertices++) {
+            if (vertexIndex[indexOfVertices] != null) {
                 break;
             }
         }
 
+        dfs(indexOfVertices);
+
+        // check if all the vertices were visited
+        for (indexOfVertices = 0; indexOfVertices < MAX_GRAPH_VERTICES; indexOfVertices++) {
+            if (vertexIndex[indexOfVertices] == null) {
+                continue;
+            }
+            // if the connection count for any vertex is 0, then all the vertices were not visited
+            if (connectedCount[indexOfVertices] == 0) {
+                returnCount = false;
+                break;
+            }
+        }
+        for (indexOfVertices = 0; indexOfVertices < MAX_GRAPH_VERTICES; indexOfVertices++) {
+            System.out.println("debug: isConnected: connectedCount = " + connectedCount[indexOfVertices]);
+        }
         return returnCount;
     }
 
@@ -431,41 +441,76 @@ public class graphs {
      * DFS: Depth First Search
      * @param adjacencyList
      */
+
     // only done at load time
     static int count = 1;
-    private void dfs(LinkedList<vertex> adjacencyList) {
+    private void dfs(int indexOfVertex) {
+        System.out.println("debug: dfs: called with indexOfVertex = " + indexOfVertex);
         // mark this vertex as visited
-        adjacencyList.get(0).connectedCount = count;
-        // look at each vertex connected to the first vertex in this list
-        for (int indexOfVertex = 1; indexOfVertex < adjacencyList.size(); indexOfVertex++) {
-            // create a connected adjacency list and find if each element has been visited
-            LinkedList<vertex> connectedAdjacencyList = findAdjacencyList(adjacencyList.get(indexOfVertex));
+        connectedCount[indexOfVertex] = count;
 
-            // if the current element is unvisited, then increment the count and go to its adjacency list
-            //  and search it too
-            if (connectedAdjacencyList.get(0).connectedCount == 0) {
-                count = count + 1;
-                dfs(connectedAdjacencyList);
+        // look at each vertex connected to the first vertex in this list
+        for (int indexOfConnection = 1; indexOfConnection < MAX_GRAPH_VERTICES; indexOfConnection++) {
+            // ignore diagonal
+            if (indexOfVertex == indexOfConnection) {
+                continue;
             }
+            if (vertexIndex[indexOfConnection] == null) {
+                continue;
+            }
+            // undirected: check for connections
+            System.out.println("debug: dfs: check for connections: adjMatrix = " + adjMatrix[indexOfVertex][indexOfConnection]
+                    + ", connectedCount[indexOfConnection] = " + connectedCount[indexOfConnection]);
+            System.out.println("debug: dfs: indexOfVertex = " + indexOfVertex + ", indexOfConnection = " + indexOfConnection);
+            if (adjMatrix[indexOfVertex][indexOfConnection] != 0) {
+                // if current element is unvisited, then increment count and also search the element's adjacency matrix
+                if (connectedCount[indexOfConnection] == 0) {
+                    count = count + 1;
+                    dfs(indexOfConnection);
+                }
+            }
+        }
+    }
+
+    private void printAdjMatrix() {
+        System.out.println("name 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026" );
+        for (int indexOfRow = 0; indexOfRow < MAX_GRAPH_VERTICES; indexOfRow++) {
+            System.out.print(vertexIndex[indexOfRow] + " ");
+            for (int indexOfCol = 0; indexOfCol < MAX_GRAPH_VERTICES; indexOfCol++) {
+                System.out.print(adjMatrix[indexOfRow][indexOfCol] + " ");
+            }
+            System.out.println();
         }
     }
 
     /**
      * There is an edge from every vertex to every other vertex.
-     * If the graph is fully connected, the length of each sublist will match the length of the
-     * list of lists, which is the number of vertices.
+     * If the graph is fully connected, a
+     *
      * rc = return code
      * @return
      */
     private boolean isFullyConnected() {
+        //debug:
+        printAdjMatrix();
+
         boolean rc = true;
-        int numOfVertices = countVertices();
-        int indexOfAdjacencyList;
-        for (indexOfAdjacencyList = 0; indexOfAdjacencyList < listOfAdjacencyLists.size(); indexOfAdjacencyList++) {
-            LinkedList<vertex> adjacencyList = listOfAdjacencyLists.get(indexOfAdjacencyList);
-            if (adjacencyList.size() != numOfVertices) {
-                rc = false;
-                break;
+        int indexOfStarting = 0;
+        int indexOfConnecting = 0;
+        for (indexOfStarting = 0; indexOfStarting < MAX_GRAPH_VERTICES; indexOfStarting++) {
+            // check the first triangle, regardless of directed or undirected
+            if (vertexIndex[indexOfStarting] != null) {
+                for (indexOfConnecting = 0; indexOfConnecting < MAX_GRAPH_VERTICES; indexOfConnecting++) {
+                    // ignore the diagonal
+                    if (indexOfStarting == indexOfConnecting) {
+                        continue;
+                    }
+                    if ((vertexIndex[indexOfConnecting] != null)
+                            && (adjMatrix[indexOfStarting][indexOfConnecting] == 0)) {
+                        rc = false;
+                        return rc;
+                    }
+                }
             }
         }
         return rc;
@@ -485,103 +530,135 @@ public class graphs {
         return graphFileLines;
     }
 
-    private void printGraph() {
-        // A              -       w             -     >                          B
-        // vertex name 1, dash, weight or dash, dash, dash or arrow if directed, vertex name 2
-        // undirected:             A-----B-----C
-        // undirected with weight: A--w--B--w--C
-        // directed:               A---->B---->C
-        // directed with weight:   A--w->B--w->C
+    /**
+     * Building blocks of the following format:
+     * A              -       w             -     >                          B
+     * vertex name 1, dash, weight or dash, dash, dash or arrow if directed, vertex name 2
+     *
+     * Prints graph in the following format:
+     * (1) undirected:             A-----B-----C
+     * (2) undirected with weight: A--w--B--w--C
+     * (3) directed:               A---->B---->C
+     * (4) directed with weight:   A--w->B--w->C
+     */
 
-        //go through all the adjacency lists
-        int indexOfAdjacencyList;
-        int indexOfVertex;
-        vertex connectedVertex;
+    private void printGraph(boolean direct) {
+        int indexOfStarting;
+        int indexOfConnecting;
         String weight = "-.-";
         String directed = "-";
-        for (indexOfAdjacencyList = 0; indexOfAdjacencyList < listOfAdjacencyLists.size(); indexOfAdjacencyList++) {
-            LinkedList<vertex> adjacencyList = listOfAdjacencyLists.get(indexOfAdjacencyList);
 
-            //go through all the vertices in each adjacency list
-            for (indexOfVertex = 0; indexOfVertex < adjacencyList.size(); indexOfVertex++) {
-                connectedVertex = adjacencyList.get(indexOfVertex);
-                if (indexOfVertex == 0) {
-                    //just print out the starting vertex
-                    System.out.print(connectedVertex.name + "-");
-                    //and if there are no further vertices
-                    if (indexOfVertex == adjacencyList.size()-1) {
+        // go through all the matrix
+        for (indexOfStarting = 0; indexOfStarting < MAX_GRAPH_VERTICES; indexOfStarting++) {
+
+            // ignoring non-populated elements in the adjacency matrix
+            if (vertexIndex[indexOfStarting] == null) {
+                continue;
+            }
+            System.out.print(vertexIndex[indexOfStarting]);
+
+            // go through all the vertices connected to the starting vertex
+            for (indexOfConnecting = 0; indexOfConnecting < MAX_GRAPH_VERTICES; indexOfConnecting++) {
+                // ignore diagonal
+                if (indexOfStarting == indexOfConnecting) {
+                    continue;
+                }
+                double weightValue = adjMatrix[indexOfStarting][indexOfConnecting];
+                // ignoring non-populated and unconnected elements in the adjacency matrix
+                if ((vertexIndex[indexOfConnecting] == null) || (weightValue == 0)) {
+                    // determining if need a new line
+                    if (indexOfConnecting == MAX_GRAPH_VERTICES-1) {
                         System.out.println();
                     }
+
                     continue;
                 }
 
-                //when weighted graph, weight will be a value
-                if (connectedVertex.weight != 0) {
-                    weight = String.valueOf(connectedVertex.weight);
+                if (weightValue > 1) {
+                    weight = String.valueOf(adjMatrix[indexOfStarting][indexOfConnecting]);
                 }
 
-                //when directed graph, directed will show the direction (assumes first to second)
-                if (connectedVertex.directed == true) {
+                // when directed graph, directed will show the direction (assumes first to second)
+                if (direct == true) {
                     directed = ">";
                 }
 
-                System.out.print(weight + directed + adjacencyList.get(indexOfVertex).name);
-                if (indexOfVertex == adjacencyList.size()-1) {
-                    System.out.println();
-                }
-                else {
-                    System.out.print("-");
-                }
+                System.out.print("-" + weight + directed + vertexIndex[indexOfConnecting]);
             }
         }
     }
 
-    private static void parseVertices(String currentLine, graphs userFile, boolean directed) {
+    /**
+     *
+     * @param currentLine
+     * @param userFile
+     * @param directed
+     */
+    private static void parseVertices(String currentLine, graphsA userFile, boolean directed) {
         String[] vertexNames = userFile.tokenizer(currentLine);
 
         // parse the vertices list
         int j = 0;
+
         while (vertexNames[j] != null) {
             System.out.println("debug: adding vertex " + vertexNames[j]);
             userFile.addVertex(vertexNames[j], directed);
             j = j+1;
         }
+
     }
 
-    private static void parseEdges(String currentLine, graphs userFile, boolean weight, boolean directed) throws IOException {
-        double weightNumber = 0;
-        String[] edgeDataToAdd = userFile.tokenizer(currentLine);
+    /**
+     *
+     * @param currentLine
+     * @param userFile
+     * @param weight
+     * @param directed
+     */
+    private static void parseEdges(String currentLine, graphsA userFile, boolean weight, boolean directed) {
+        try {
+            double weightNumber = 0;
+            String[] edgeDataToAdd = userFile.tokenizer(currentLine);
 
+            //parse the edge data
+            System.out.println("debug: parsing vertex " + 1 + " for edge: " + edgeDataToAdd[0]);
+            String startingVertexName = edgeDataToAdd[0];
 
-        //parse the edge data
-        System.out.println("debug: parsing vertex " + 1 + " for edge: " + edgeDataToAdd[0]);
-        String startingVertexName = edgeDataToAdd[0];
+            System.out.println("debug: parsing vertex " + 2 + " for edge: " + edgeDataToAdd[1]);
+            String connectingVertexName = edgeDataToAdd[1];
 
-        System.out.println("debug: parsing vertex " + 2 + " for edge: " + edgeDataToAdd[1]);
-        String connectingVertexName = edgeDataToAdd[1];
+            if ((weight == true) && (edgeDataToAdd[2] != null)) {
+                System.out.println("debug: parsing weight value: " + edgeDataToAdd[2]);
+                weightNumber = Double.parseDouble(edgeDataToAdd[2]);
 
-        if ((weight == true) && (edgeDataToAdd[2] != null)) {
-            System.out.println("debug: parsing weight value: " + edgeDataToAdd[2]);
-            weightNumber = Double.parseDouble(edgeDataToAdd[2]);
+            }
 
+            // create the edge
+            userFile.addEdge(startingVertexName, connectingVertexName, weightNumber, directed);
+        }
+        catch (Exception e) {
+            System.out.println("Error creating edge: " + e.getMessage());
         }
 
-        // create the edge
-        vertex vertexStarting = new vertex(startingVertexName);
-        vertex vertexConnecting = new vertex(connectingVertexName);
-        userFile.addEdge(vertexStarting, vertexConnecting, weightNumber, directed);
     }
 
     final String theNextSpace = " ";
     final int maxTokens = 27;
     public String[] output = new String[maxTokens];
 
+    /**
+     *
+     * @param input
+     * @return
+     */
     public String [] tokenizer(String input) {
         String temp = input;
         int j = 0;
+
         while (temp != null) {
             //find next token
             int endOfTokenIndex = temp.indexOf(theNextSpace);
+
             if (endOfTokenIndex > 0) {
                 output[j] = temp.substring(0, endOfTokenIndex);
                 //strip off that token and the current space
@@ -602,7 +679,7 @@ public class graphs {
 
     public static void main(String[] args) throws IOException
     {
-        graphs userFile = new graphs();
+        graphsA userFile = new graphsA();
         String currentLine;
         boolean weighted = false;
         boolean direct = false;
@@ -705,9 +782,6 @@ public class graphs {
                      */
 
                     if (tokenArray[0].equalsIgnoreCase("hasEdge")) {
-                        vertex starting = new vertex(tokenArray[1]);
-                        vertex connecting = new vertex(tokenArray[2]);
-
                         //get expected result
                         String expectedResult = graphFileLines.readLine();
                         expectedResult = expectedResult.replace("\t", " ");
@@ -716,11 +790,11 @@ public class graphs {
                         //set default return value
                         String result = "false";
                         //get test result
-                        if (userFile.hasEdge(starting, connecting) == true) {
+                        if (userFile.hasEdge(tokenArray[1], tokenArray[2]) == true) {
                             result = "true";
                         }
 
-                        System.out.println("Parsing hasEdge " + starting.name + " " + connecting.name + ":");
+                        System.out.println("Parsing hasEdge " + tokenArray[1] + " " + tokenArray[2] + ":");
                         System.out.println("Test results. Expected: " + expectedResult + ". Received: " + result + ".");
                         System.out.println();
                     }
@@ -732,8 +806,6 @@ public class graphs {
                      */
                     if (tokenArray[0].equalsIgnoreCase("addEdge")) {
                         double weight = 0;
-                        vertex starting = new vertex(tokenArray[1]);
-                        vertex connecting = new vertex(tokenArray[2]);
                         if(tokenArray[3] != null) {
                             weight = Double.parseDouble(tokenArray[3]);
                         }
@@ -745,11 +817,11 @@ public class graphs {
 
                         //get test result
                         String result = "false";
-                        if (userFile.addEdge(starting, connecting, weight, direct) == true) {
+                        if (userFile.addEdge(tokenArray[1], tokenArray[2], weight, direct) == true) {
                             result = "true";
                         }
 
-                        System.out.println("Parsing addEdge " + starting.name + " " + connecting.name + " " + weight + ":");
+                        System.out.println("Parsing addEdge " + tokenArray[1] + " " + tokenArray[2] + " " + weight + ":");
                         System.out.println("Test results. Expected: " + expectedResult + ". Received: " + result + ".");
                         System.out.println();
                     }
@@ -759,8 +831,6 @@ public class graphs {
                      * Outputs true if edge deleted, otherwise false.
                      */
                     if (tokenArray[0].equalsIgnoreCase("deleteEdge")) {
-                        vertex starting = new vertex(tokenArray[1]);
-                        vertex connecting = new vertex(tokenArray[2]);
 
                         //get expected result
                         String expectedResult = graphFileLines.readLine();
@@ -770,11 +840,11 @@ public class graphs {
                         //set default return
                         String result = "false";
                         //get test result
-                        if (userFile.deleteEdge(starting, connecting) == true) {
+                        if (userFile.deleteEdge(tokenArray[1], tokenArray[2], direct) == true) {
                             result = "true";
                         }
 
-                        System.out.println("Parsing deleteEdge: "  + starting.name + " " + connecting.name + ":");
+                        System.out.println("Parsing deleteEdge: "  + tokenArray[1] + " " + tokenArray[2] + ":");
                         System.out.println("Test results. Expected: " + expectedResult + ". Received: " + result + ".");
                         System.out.println();
                     }
@@ -793,7 +863,7 @@ public class graphs {
                         String result = "false";
 
                         //get test result
-                        if (userFile.addVertex(tokenArray[1], direct) != null) {
+                        if (userFile.addVertex(tokenArray[1], direct) > -1) {
                             result = "true";
                         }
 
@@ -807,8 +877,6 @@ public class graphs {
                      * Outputs true if the vertex was deleted, otherwise false.
                      */
                     if (tokenArray[0].equalsIgnoreCase("deleteVertex")) {
-
-                        vertex toDelete = new vertex(tokenArray[1]);
                         //get expected result
                         String expectedResult = graphFileLines.readLine();
                         expectedResult = expectedResult.replace("\t", " ");
@@ -818,11 +886,11 @@ public class graphs {
                         String result = "false";
 
                         //get test result
-                        if (userFile.deleteVertex(toDelete) == true) {
+                        if (userFile.deleteVertex(tokenArray[1], direct) == true) {
                             result = "true";
                         }
 
-                        System.out.println("Parsing deleteVertex " + toDelete.name + ":");
+                        System.out.println("Parsing deleteVertex " + tokenArray[1] + ":");
                         System.out.println("Test results. Expected: " + expectedResult + ". Received: " + result + ".");
                         System.out.println();
                     }
@@ -902,7 +970,7 @@ public class graphs {
                         expectedResult = expectedResult.trim();
 
                         //get test result
-                        int result = userFile.countEdges();
+                        int result = userFile.countEdges(direct);
 
                         System.out.println("Parsing countEdges:");
                         System.out.println("Test results. Expected: " + expectedResult + ". Received: " + result + ".");
@@ -967,16 +1035,15 @@ public class graphs {
                      * Outputs the current graph.
                      */
                     if (tempLine.startsWith("printGraph")) {
-                        userFile.printGraph();
+                        userFile.printGraph(direct);
                         System.out.println();
                     }
                 }
-            } else {
+            }
+            else {
                 System.out.println("File not found. Tried to load:");
                 System.out.println(file + inputFileExtension);
             }
         }
     }
-
-
 }
